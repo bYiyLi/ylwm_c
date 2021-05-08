@@ -8,7 +8,7 @@
 #include <xcb/xcb_keysyms.h>
 #include <xcb/xproto.h>
 #include <stdlib.h>
-typedef int BOOL;
+//typedef int BOOL;
 #define ROOT_EVENT_MASK (XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT |                                       \
                          XCB_EVENT_MASK_BUTTON_PRESS |                                                \
                          XCB_EVENT_MASK_STRUCTURE_NOTIFY | /* when the user adds a screen (e.g. video \
@@ -18,8 +18,13 @@ typedef int BOOL;
                          XCB_EVENT_MASK_PROPERTY_CHANGE |                                             \
                          XCB_EVENT_MASK_FOCUS_CHANGE |                                                \
                          XCB_EVENT_MASK_ENTER_WINDOW)
-#define TRUE 1
-#define FALSE 0
+
+
+typedef enum {
+    TRUE=1,
+    FALSE=0
+}BOOL;
+
 xcb_connection_t *connection;
 BOOL is_run=FALSE;
 
@@ -61,23 +66,30 @@ BOOL init_connection(){
 };
 const xcb_setup_t *setup_t;
 
-typedef struct yl_wm_window yl_wm_window_item;
-struct yl_wm_window{
+typedef struct{
     xcb_window_t *window;
     xcb_get_window_attributes_cookie_t * window_attribute_cookie;
-    yl_wm_window_item * up;
-    yl_wm_window_item * down;
-}*yl_wm_window;
+}yl_wm_window;
 
-typedef struct  yl_wm_screen yl_wm_screen_node;
- __attribute__((unused)) struct  yl_wm_screen{
-    int num;
-    yl_wm_screen_node *parent_node;
-    yl_wm_screen_node *brother_node;
+typedef struct {
+
+}yl_wm_page;
+
+int yl_wm_screen_size=0;
+typedef struct  yl_wm_screen{
     xcb_screen_t *screen;
-    char * name;
-     yl_wm_window_item * windows_root;
-} *yl_wm_root_screen_node;
+    int page_size;
+    int page_now;
+    yl_wm_page * yl_wm_page;
+} yl_wm_screen_item;
+
+
+yl_wm_screen_item * root_screen_node;
+
+BOOL init_page(yl_wm_screen_item screen_node);
+BOOL init_windows(yl_wm_page page,xcb_window_t root);
+BOOL init_screen_linked();
+
 
 BOOL check_other_wm(){
     //Assigning to 'xcb_setup_t *' (aka 'struct xcb_setup_t *') from 'const struct xcb_setup_t *' discards qualifiers
@@ -85,7 +97,7 @@ BOOL check_other_wm(){
     xcb_screen_iterator_t iter = xcb_setup_roots_iterator(setup_t);
     if (iter.rem <= 0){
         fprintf(stderr,"当前没有Screen\n");
-//        return FALSE;
+        return FALSE;
     }
     xcb_window_t root = iter.data->root;
     xcb_void_cookie_t cookie = xcb_change_window_attributes_checked(connection,root, XCB_CW_EVENT_MASK, (uint32_t[]){ROOT_EVENT_MASK});
@@ -96,66 +108,58 @@ BOOL check_other_wm(){
     }
     return TRUE;
 }
-
-/*
- * Go through all existing windows (if the window manager is restarted) and manage them
- *
- */
-void init_screen_windows(yl_wm_screen_node *screen_node) {
+BOOL init_page(yl_wm_screen_item screen_node){
+    screen_node.page_size=1;
+    screen_node.page_now=1;
+    screen_node.yl_wm_page= malloc(sizeof(yl_wm_page));
+    return init_windows(*screen_node.yl_wm_page,screen_node.screen->root);
+}
+BOOL init_windows(yl_wm_page page,xcb_window_t root) {
     xcb_query_tree_reply_t *reply;
     int i, len;
     xcb_window_t *children;
     xcb_get_window_attributes_cookie_t *cookies;
     /* Get the tree of windows whose parent is the root window (= all) */
-    if ((reply = xcb_query_tree_reply(connection, xcb_query_tree(connection, screen_node->screen->root), 0)) == NULL)
-        return;
-
+    if ((reply = xcb_query_tree_reply(connection, xcb_query_tree(connection, root), NULL)) == NULL)
+        return FALSE;
     len = xcb_query_tree_children_length(reply);
+    printf("\n init_windows xcb_query_tree_children_length :%d\n",len);
     if (len<=0){
-        return;
+        return TRUE;
     }
     cookies = malloc(len * sizeof(*cookies));
-    screen_node->windows_root = malloc(sizeof(yl_wm_window_item));
-    yl_wm_window_item *now=screen_node->windows_root;
     /* Request the window attributes for every window */
     children = xcb_query_tree_children(reply);
-    for (i = 1; i < len; ++i){
-        cookies[i] = xcb_get_window_attributes(connection, children[i]);
-        yl_wm_window_item * new= malloc(sizeof(yl_wm_window_item));
-        new->window=&children[i];
-        new->window_attribute_cookie=&cookies[i];
+    for (i = 0; i < len; ++i){
+        printf("\nchildren %d:",children[i]);
 
+//        cookies[i] = xcb_get_window_attributes(connection, children[i]);
+//        yl_wm_window * new= malloc(sizeof(yl_wm_window));
+//        new->window=&children[i];
+//        new->window_attribute_cookie=&cookies[i];
     }
     free(reply);
+    return TRUE;
 }
 
-void init_screen_linked(){
+BOOL init_screen_linked(){
+    printf("==============================");
     xcb_screen_iterator_t iter = xcb_setup_roots_iterator(setup_t);
-    yl_wm_root_screen_node = malloc(sizeof(yl_wm_screen_node));
-    yl_wm_root_screen_node->brother_node=yl_wm_root_screen_node;
-    yl_wm_root_screen_node->parent_node=yl_wm_root_screen_node;
-    yl_wm_root_screen_node->screen=iter.data;
-    yl_wm_root_screen_node->name="yl_wm";
-    yl_wm_screen_node * now_node=yl_wm_root_screen_node;
-    yl_wm_root_screen_node->num=0;
-    init_screen_windows(yl_wm_root_screen_node);
-    for(int n=1;iter.rem!=0;n++){
-        xcb_screen_next(&iter);
-        if (iter.rem==0){
-            break;
+    do {
+        yl_wm_screen_size++;
+        if ((root_screen_node=realloc(root_screen_node,yl_wm_screen_size*sizeof(yl_wm_screen_item)))==NULL){
+            fprintf(stderr,"err Dealloc root_screen_node\n");
+            return FALSE;
         }
-        yl_wm_screen_node * new_node= malloc(sizeof(yl_wm_screen_node));
-        new_node->name="y_wm";
-        new_node->screen=iter.data;
-        new_node->parent_node=now_node;
-        new_node->brother_node=now_node->brother_node;
-        now_node->brother_node->parent_node=new_node;
-        now_node->brother_node=new_node;
-        now_node->num=n;
-        init_screen_windows(new_node);
-    }
+        root_screen_node[yl_wm_screen_size-1].screen=iter.data;
 
-
+        if (!init_page(root_screen_node[yl_wm_screen_size-1])){
+            fprintf(stderr,"init page err\n");
+            return FALSE;
+        };
+        xcb_screen_next(&iter);
+    } while (iter.rem!=0);
+    return TRUE;
 }
 
 int main() {
@@ -167,9 +171,11 @@ int main() {
 
 
     }
-    printf("connection: %p",connection);
-
+    printf("\nconnection: %p\n",connection);
+    printf("\nroot_screen_node: %p\n",root_screen_node);
+    printf("\nyl_wm_screen_size: %d\n",yl_wm_screen_size);
     xcb_disconnect(connection);
+    free(root_screen_node);
     fflush(stderr);
     fflush(stdout);
     return 0;

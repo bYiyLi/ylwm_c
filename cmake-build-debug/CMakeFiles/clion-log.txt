@@ -1,4 +1,0 @@
-/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=/usr/bin/gcc -G "CodeBlocks - Unix Makefiles" /home/yi/mydwm/ylwm
--- Configuring done
--- Generating done
--- Build files have been written to: /home/yi/mydwm/ylwm/cmake-build-debug

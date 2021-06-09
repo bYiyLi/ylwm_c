@@ -21,6 +21,7 @@ typedef struct {
 } Key;
 xcb_connection_t *conn = NULL;             // Connection to X server.
 const struct xcb_setup_t * xcb_setup = NULL;
+xcb_generic_event_t *current_ev;
 int sig_code = 0;                           // Signal code. Non-zero if we've been interruped by a signal.
 int screen_num = -1;
 bool is_run = true;
@@ -37,10 +38,14 @@ typedef struct {
 } handler_func_t;
 //===========================================================
 void kill_ylwm();
-static void kill_client(xcb_generic_event_t *event);
+static void kill_client();
 static void spawn(char **com);
 
+//===============================================
+static void register_existing_windows(ylwm_screen screen);
+static void register_events(xcb_window_t window);
 //==========================================================
+static char * window_name(xcb_window_t window);
 
 static xcb_keycode_t *xcb_get_keycodes(xcb_keysym_t keysym);
 

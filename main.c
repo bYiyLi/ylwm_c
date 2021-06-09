@@ -1,4 +1,5 @@
 #include <wait.h>
+#include <string.h>
 #include "main.h"
 #include "config.h"
 int
@@ -17,8 +18,13 @@ main(int argc, char **argv){
     }
 }
 
-static void kill_client(xcb_generic_event_t *event) {
-
+static void kill_client(void) {
+    const xcb_key_press_event_t * ev = (xcb_key_press_event_t*) current_ev;
+    xcb_kill_client(conn, ev->child);
+    printf("=== kill client %d\n",ev->child);
+    printf("=== kill client` root  %d\n",ev->root);
+    printf("=== kill client` event %d\n",ev->event);
+    xcb_flush(conn);
 }
 
 void kill_ylwm(){
@@ -147,7 +153,69 @@ static xcb_keycode_t *xcb_get_keycodes(xcb_keysym_t keysym) {
 }
 
 static bool setup(){
+    for (int i = 0; i < screen_list_size; ++i) {
+        register_existing_windows(ylwm_screen_list[i]);
+    }
     return true;
+}
+
+static void register_events(xcb_window_t window) {
+    char title[] = "Hello, Engine!";
+    xcb_change_property(conn, XCB_PROP_MODE_REPLACE, window,
+                        XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8,
+                        strlen(title), title);
+
+    uint32_t vals[5];
+    vals[0] = 0;
+    vals[1] = 0;
+    vals[2] = 500;
+    vals[3] = 400;
+    xcb_configure_window(conn, window, XCB_CONFIG_WINDOW_X |
+                                         XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH |
+                                         XCB_CONFIG_WINDOW_HEIGHT , vals);
+    xcb_flush(conn);
+    values[0] = XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE;
+    xcb_change_window_attributes_checked(conn, window,
+                                         XCB_CW_EVENT_MASK, values);
+    xcb_map_window(conn, window);
+//    setFocus(e->window);
+    xcb_flush(conn);
+}
+
+static void register_existing_windows(ylwm_screen screen) {
+    xcb_query_tree_reply_t *reply;
+    if ((reply = xcb_query_tree_reply(conn, xcb_query_tree(conn, screen.current_screen->root), 0)) == NULL) {
+        return;
+    }
+    int len = xcb_query_tree_children_length(reply);
+    xcb_window_t *children = xcb_query_tree_children(reply);
+    for (int i = 0; i < len; i++) {
+        printf("register_existing_windows %d\n",children[i]);
+        register_events(children[i]);
+        window_name(children[i]);
+//        window_name(screen.current_screen->root);
+    }
+
+
+
+    free(reply);
+}
+
+static char * window_name(xcb_window_t window){
+
+    xcb_get_property_cookie_t cookie = xcb_get_property(conn, 0, window, XCB_ATOM_WM_NAME,
+                              XCB_ATOM_STRING, 0, 0);
+    xcb_flush(conn);
+    xcb_get_property_reply_t * reply=NULL;
+    if ((reply = xcb_get_property_reply(conn, cookie, NULL))) {
+        int len = xcb_get_property_value_length(reply);
+        if (len == 0) {
+            printf("Zero Length\n");
+            free(reply);
+            return NULL;
+        }
+        printf("WM_NAME is %.*s\n", len, (char*) xcb_get_property_value(reply));
+    }
 }
 
 static void cleanup(){
@@ -236,21 +304,9 @@ static xcb_keysym_t xcb_get_keysym(xcb_keycode_t keycode) {
 static void handleMapRequest(xcb_generic_event_t *ev){
     puts("handleMapRequest\n");
     xcb_map_request_event_t *e = (xcb_map_request_event_t *) ev;
-    xcb_map_window(conn, e->window);
-//    uint32_t vals[5];
-//    vals[0] = (scre->width_in_pixels / 2) - (WINDOW_WIDTH / 2);
-//    vals[1] = (scre->height_in_pixels / 2) - (WINDOW_HEIGHT / 2);
-//    vals[2] = WINDOW_WIDTH;
-//    vals[3] = WINDOW_HEIGHT;
-//    vals[4] = BORDER_WIDTH;
-//    xcb_configure_window(dpy, e->window, XCB_CONFIG_WINDOW_X |
-//                                         XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH |
-//                                         XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_BORDER_WIDTH, vals);
+    register_events(e->window);
     xcb_flush(conn);
-    values[0] = XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE;
-    xcb_change_window_attributes_checked(conn, e->window,
-                                         XCB_CW_EVENT_MASK, values);
-//    setFocus(e->window);
+    window_name(e->window);
 }
 static void handleFocusIn(xcb_generic_event_t *ev){
     puts("handleFocusIn\n");
@@ -262,16 +318,16 @@ static void handleFocusOut(xcb_generic_event_t *ev){
 static int run(){
     int ret = xcb_connection_has_error(conn);
     if (ret == 0) {
-        xcb_generic_event_t *ev = xcb_wait_for_event(conn);
-        if (ev != NULL) {
-            printf("ev->response_type:%d\n",ev->response_type);
+        current_ev = xcb_wait_for_event(conn);
+        if (current_ev != NULL) {
+            printf("ev->response_type:%d\n",current_ev->response_type);
             handler_func_t *handler;
             for (handler = handler_fun_list; handler->func != NULL; handler++) {
-                if ((ev->response_type & ~0x80) == handler->request) {
-                    handler->func(ev);
+                if ((current_ev->response_type & ~0x80) == handler->request) {
+                    handler->func(current_ev);
                 }
             }
-            free(ev);
+            free(current_ev);
         }
     }
     xcb_flush(conn);

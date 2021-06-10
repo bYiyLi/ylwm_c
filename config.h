@@ -17,11 +17,18 @@
 //25   11001 8+1+16
 
 static char *termcmd[] = { "st", NULL };
+static char *rofi_drun[] = { "rofi", "-show","drun" };
+static char *rofi_windowcd[] = { "rofi", "-show","windowcd" };
+static char *rofi_combi[] = { "rofi", "-show","combi" };
+static char *rofi_keys[] = { "rofi", "-show","keys" };
 static Key keys[] = {
 //        { MOD1,      0x0062, spawn,      browcmd }, /* 0x0062 = XK_b */
 //        { MOD1,      0xff0d, spawn,      termcmd }, /* 0xff0d = XK_Enter */
 //        { MOD1,      0x0020, spawn,      menucmd }, /* 0x0020 = XK_space */
-//        { MOD1,      0x0066, fullclient, NULL },    /* 0x0066 = XK_f */
+        { AltMask|Mod2Mask,     XK_r , spawn, rofi_drun },    /* 0x0066 = XK_f */
+        { AltMask|Mod2Mask,     XK_w , spawn, rofi_windowcd },    /* 0x0066 = XK_f */
+        { AltMask|Mod2Mask,     XK_c , spawn, rofi_combi },    /* 0x0066 = XK_f */
+        { AltMask|Mod2Mask,     XK_e , spawn, rofi_keys },    /* 0x0066 = XK_f */
         { ShiftMask|AltMask|Mod2Mask,      XK_c, kill_client, NULL },    /* 0x0071 = XK_q */
         { ShiftMask|AltMask|Mod2Mask,      XK_q, kill_ylwm, NULL },    /* 0x0071 = XK_q */
         { ShiftMask|AltMask|Mod2Mask, XK_Return, spawn,    termcmd }     /* 0x0071 = XK_q */

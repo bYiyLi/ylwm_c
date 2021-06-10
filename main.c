@@ -160,20 +160,6 @@ static bool setup(){
 }
 
 static void register_events(xcb_window_t window) {
-    char title[] = "Hello, Engine!";
-    xcb_change_property(conn, XCB_PROP_MODE_REPLACE, window,
-                        XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8,
-                        strlen(title), title);
-
-    uint32_t vals[5];
-    vals[0] = 0;
-    vals[1] = 0;
-    vals[2] = 500;
-    vals[3] = 400;
-    xcb_configure_window(conn, window, XCB_CONFIG_WINDOW_X |
-                                         XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH |
-                                         XCB_CONFIG_WINDOW_HEIGHT , vals);
-    xcb_flush(conn);
     values[0] = XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_FOCUS_CHANGE;
     xcb_change_window_attributes_checked(conn, window,
                                          XCB_CW_EVENT_MASK, values);
@@ -203,8 +189,8 @@ static void register_existing_windows(ylwm_screen screen) {
 
 static char * window_name(xcb_window_t window){
 
-    xcb_get_property_cookie_t cookie = xcb_get_property(conn, 0, window, XCB_ATOM_WM_NAME,
-                              XCB_ATOM_STRING, 0, 0);
+    xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(conn, 0, window, XCB_ATOM_WM_CLASS,
+                                                                  XCB_GET_PROPERTY_TYPE_ANY, 0, 8192);
     xcb_flush(conn);
     xcb_get_property_reply_t * reply=NULL;
     if ((reply = xcb_get_property_reply(conn, cookie, NULL))) {
@@ -214,7 +200,7 @@ static char * window_name(xcb_window_t window){
             free(reply);
             return NULL;
         }
-        printf("WM_NAME is %.*s\n", len, (char*) xcb_get_property_value(reply));
+        printf("===================WM_NAME is %.*s\n", len, (char*) xcb_get_property_value(reply));
     }
 }
 
@@ -279,7 +265,6 @@ print_modifiers (uint32_t mask)
     printf ("\n");
 }
 
-
 static void handleKeyPress(xcb_generic_event_t *ev){
     puts("handleKeyPress\n");
     xcb_key_press_event_t *e = ( xcb_key_press_event_t *) ev;
@@ -301,16 +286,20 @@ static xcb_keysym_t xcb_get_keysym(xcb_keycode_t keycode) {
     xcb_key_symbols_free(keysyms);
     return keysym;
 }
+
 static void handleMapRequest(xcb_generic_event_t *ev){
     puts("handleMapRequest\n");
     xcb_map_request_event_t *e = (xcb_map_request_event_t *) ev;
     register_events(e->window);
     xcb_flush(conn);
     window_name(e->window);
+    window_name(e->parent);
 }
+
 static void handleFocusIn(xcb_generic_event_t *ev){
     puts("handleFocusIn\n");
 }
+
 static void handleFocusOut(xcb_generic_event_t *ev){
     puts("handleFocusOut\n");
 }
